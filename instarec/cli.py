@@ -72,8 +72,16 @@ def get_argument_parser() -> argparse.ArgumentParser:
         "--cookies",
         metavar="COOKIES_FILE",
         help=(
-            "Path to a Netscape-format cookie file for Instagram authentication."
-            "Alternative to authentication via instagrapi when providing a username / user ID"
+            "Path to a Netscape-format cookie file for Instagram authentication. "
+            "Alternative to authentication via instagrapi / credentials.json."
+        ),
+    )
+    auth_group.add_argument(
+        "--credentials",
+        metavar="CREDENTIALS_FILE",
+        help=(
+            "Path to credentials.json containing username, password, and optional totp_seed. "
+            "Defaults to standard user config directory."
         ),
     )
 
@@ -223,8 +231,10 @@ async def main(args: argparse.Namespace) -> None:
     await downloader.run()
 
 
-async def resolve_mpd_url(identifier: str, cookie_file: str | None, proxy: str | None) -> str:
-    async with instagram.get_client(cookie_file=cookie_file, proxy=proxy) as client:
+async def resolve_mpd_url(
+    identifier: str, cookie_file: str | None, proxy: str | None, credentials_file: str | None = None
+) -> str:
+    async with instagram.get_client(cookie_file=cookie_file, proxy=proxy, credentials_file=credentials_file) as client:
         return await client.get_mpd(identifier)
 
 
@@ -245,7 +255,14 @@ def main_entry():
         mpd_url = input_value
     else:
         try:
-            mpd_url = asyncio.run(resolve_mpd_url(input_value, args.cookies, args.proxy))
+            mpd_url = asyncio.run(
+                resolve_mpd_url(
+                    input_value,
+                    args.cookies,
+                    args.proxy,
+                    credentials_file=getattr(args, "credentials", None),
+                )
+            )
         except (instagram.UserNotLiveError, instagram.UserNotFoundError) as e:
             log.MAIN.error(f"Not Found error: {e}")
             sys.exit(1)

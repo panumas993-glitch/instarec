@@ -69,7 +69,7 @@ def parse_initial_stream_info(
 
 
 def select_representation(root: etree._Element, media_type: str, preferred_ids: list[str] | None) -> etree._Element:
-    media_name = media_type.split("/")[0]  # "video" or "audio"
+    media_name = media_type.split("/", maxsplit=1)[0]  # "video" or "audio"
 
     xpath_query = f'//mpd:Representation[@mimeType="{media_type}"]'
     all_reps = root.xpath(xpath_query, namespaces=NS)

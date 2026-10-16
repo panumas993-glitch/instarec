@@ -29,7 +29,7 @@ This will install the tool and make the `instarec` command available in your ter
 
 ## Usage
 
-You can start a download by providing either a direct `.mpd` URL for a livestream or an Instagram username.
+You can start a download by providing either a direct `.mpd` URL for a livestream, an Instagram profile link, or an Instagram username.
 
 ### Basic Examples
 
@@ -58,77 +58,85 @@ You can manually find the manifest URL (`.mpd`) thourgh the browser:
 4.  In the filter box, type `.mpd` to find the manifest request.
 5.  Right-click the request and copy the full URL.
 
-### Using Instagram Usernames (Requires additional setup)
+### Using Instagram Usernames (Requires Authentication)
 
-To download using a username, you need to authenticate with Instagram. There are two methods available: cookie-based authentication and credentials-based authentication (`instagrapi`).
+To download by specifying a username, profile link, or user ID, you must authenticate with Instagram. Two authentication methods are supported: **Cookie-based** and **Credentials-based (`instagrapi`)**.
 
 > [!WARNING]
 > Instagram is known for flagging accounts that make automated requests. Continuously polling a user's live status **may get your account flagged or temporarily blocked**. Use this feature at your own risk.
 
-#### Cookie-Based Authentication
+#### 1. Cookie-Based Authentication
 
-This method uses cookies exported from your browser and does not require `instagrapi`.
+This method uses session cookies exported from your browser and does not require `instagrapi`.
 
 1.  **Export your Instagram cookies:**
 
-    Log into Instagram in your browser, then export your cookies as a Netscape-format `.txt` file using a browser extension such as [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc).
+    Log into Instagram in your browser, then export your cookies in **Netscape** format as a `.txt` file using a browser extension such as [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc).
 
 2.  **Pass the cookie file with `--cookies`:**
     ```bash
-    instarec --cookies cookies.txt <username> my_video.mkv
+    instarec <username> my_video.mkv --cookies cookies.txt
     ```
 
-#### Credentials-Based Authentication (instagrapi)
+#### 2. Credentials-Based Authentication (instagrapi)
 
 1.  **Install `instagrapi`:**
 
-    `instagrapi` is an optional dependency needed to fetch the stream URL from a username. Install it manually using pip:
+    `instagrapi` is an optional dependency used for username/password login:
     ```bash
     pip install instagrapi
     ```
 
 2.  **Configure Credentials:**
 
-    `instarec` needs your Instagram login to check a user's live status. Create a `credentials.json` file in the application's configuration directory with your username and password.
-
-    The location of this directory depends on your operating system:
+    Create a `credentials.json` file in the default configuration directory:
     *   **Linux**: `~/.config/instarec/credentials.json`
     *   **macOS**: `~/Library/Application Support/instarec/credentials.json`
-    *   **Windows**: `C:\Users\<YourUser>\AppData\Local\instarec\instarec\credentials.json`
+    *   **Windows**: `%LOCALAPPDATA%\instarec\instarec\credentials.json` (or `C:\Users\<YourUser>\AppData\Local\instarec\instarec\credentials.json`)
 
-    The content of `credentials.json` should be:
+    Alternatively, you can place `credentials.json` anywhere and pass its path using `--credentials /path/to/credentials.json`.
+
+    The content of `credentials.json` supports an optional `totp_seed` for two-factor authentication (2FA):
     ```json
     {
       "username": "your_instagram_username",
-      "password": "your_instagram_password"
+      "password": "your_instagram_password",
+      "totp_seed": "JBSWY3DPEHPK3PXP"
     }
     ```
 
+    * **`totp_seed`** *(optional)*: Your 2FA TOTP seed from Instagram. If omitted or empty, standard password-only login will be attempted.
+
+    > **Note**: A cached `session.json` is automatically saved in the same directory after the first successful login, avoiding repeated logins on subsequent runs.
+
 ### Command-Line Arguments
 
-| Argument                      | Short | Description                                                                                    |
-| ----------------------------- | ----- | ---------------------------------------------------------------------------------------------- |
-| `url_or_username`             |       | The URL of the .mpd manifest, a raw Instagram username, or a raw instagram user ID.            |
-| `output_path`                 |       | The destination filepath for the final video. Defaults to `.mkv` if no extension is provided.  |
-| `--cookies`                   |       | Path to a Netscape-format cookie file for Instagram authentication.                            |
-| `--interactive`               | `-i`  | Interactively select video and audio quality.                                                  |
-| `--log-file`                  |       | Path to a file to write logs to.                                                               |
-| `--summary-file`              |       | Path to a file to write a download summary to.                                                 |
-| `--verbose`                   | `-v`  | Enable verbose (DEBUG level) logging.                                                          |
-| `--quiet`                     | `-q`  | Suppress informational (INFO level) logging.                                                   |
-| `--video-quality`             |       | One or more representation IDs for video, in order of preference.                              |
-| `--audio-quality`             |       | One or more representation IDs for audio, in order of preference.                              |
-| `--poll-interval`             |       | Seconds to wait between polling the manifest for live segments.                                |
-| `--max-search-requests`       |       | Maximum concurrent requests when searching for past segments.                                  |
-| `--download-retries`          |       | Number of retries for a failed segment download.                                               |
-| `--download-retry-delay`      |       | Initial delay in seconds between download retries.                                             |
-| `--check-url-retries`         |       | Number of retries for a failed URL check.                                                      |
-| `--proxy`                     |       | Proxy URL (e.g. http://user:pass@host:port or socks5://host:port).                             |
-| `--no-past`                   |       | Do not download past segments, start with the livestream.                                      |
-| `--end-stream-miss-threshold` |       | Number of consecutive timestamps to search before assuming the past stream has ended.          |
-| `--search-chunk-size`         |       | Number of segments to check for existence in a single batch when searching.                    |
-| `--live-end-timeout`          |       | Seconds to wait without a new live segment before assuming the stream has ended.               |
-| `--past-segment-delay`        |       | Minimum time in seconds between each past segment download.                                    |
-| `--keep-segments`             |       | Do not delete the temporary segments directory after finishing.                                |
-| `--ffmpeg-path`               |       | Path to the ffmpeg executable.                                                                 |
-| `--ffprobe-path`              |       | Path to the ffprobe executable.                                                                |
+| Argument                 | Short | Description                                                                                   |
+| ------------------------ | ----- | --------------------------------------------------------------------------------------------- |
+| `url_or_username`        |       | The URL of the `.mpd` manifest, a profile URL, an Instagram username, or a raw user ID.      |
+| `output_path`            |       | Destination filepath for the final video. Defaults to `.mkv` if no extension is provided.     |
+| `--cookies`              |       | Path to a Netscape-format cookie file for Instagram authentication.                           |
+| `--credentials`          |       | Path to a custom `credentials.json` file (overrides default config path).                    |
+| `--interactive`          | `-i`  | Interactively select video and audio quality.                                                 |
+| `--log-file`             |       | Path to a file to write logs to.                                                              |
+| `--summary-file`         |       | Path to a file to write a download summary to.                                                |
+| `--summary-file-korean`  |       | Path to a file to write a Korean download summary to.                                         |
+| `--verbose`              | `-v`  | Enable verbose (`DEBUG` level) logging.                                                       |
+| `--quiet`                | `-q`  | Suppress informational (`INFO` level) logging.                                                |
+| `--video-quality`        |       | One or more representation IDs for video, in order of preference.                             |
+| `--audio-quality`        |       | One or more representation IDs for audio, in order of preference.                             |
+| `--poll-interval`        |       | Seconds to wait between polling the manifest for live segments.                               |
+| `--max-search-requests`  |       | Maximum concurrent requests when searching for past segments.                                 |
+| `--download-retries`     |       | Number of retries for a failed segment download.                                              |
+| `--download-retry-delay` |       | Initial delay in seconds between download retries.                                            |
+| `--check-url-retries`    |       | Number of retries for a failed URL check.                                                     |
+| `--proxy`                |       | Proxy URL (e.g. `http://user:pass@host:port` or `socks5://host:port`).                         |
+| `--no-past`              |       | Do not download past segments, start with the livestream.                                     |
+| `--end-stream-miss-threshold` |  | Number of consecutive timestamps to search before assuming the past stream has ended.         |
+| `--search-chunk-size`    |       | Number of segments to check for existence in a single batch when searching.                   |
+| `--live-end-timeout`     |       | Seconds to wait without a new live segment before assuming the stream has ended.              |
+| `--past-segment-delay`   |       | Minimum time in seconds between each past segment download.                                   |
+| `--keep-segments`        |       | Do not delete the temporary segments directory after finishing.                               |
+| `--ffmpeg-path`          |       | Path to the `ffmpeg` executable.                                                              |
+| `--ffprobe-path`         |       | Path to the `ffprobe` executable.                                                             |
+```
