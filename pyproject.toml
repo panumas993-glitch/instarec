@@ -10,7 +10,7 @@ authors = [
 ]
 description = "A tool to download Instagram live streams."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = "GPL-3.0-or-later"
 classifiers = [
     "Programming Language :: Python :: 3",

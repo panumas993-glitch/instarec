@@ -114,8 +114,6 @@ class StreamDownloader:
             if root is None:
                 self._raise_value_error("Could not fetch or parse initial manifest.")
 
-            mpd.select_representation.preferred_video_ids = self.preferred_video_ids
-            mpd.select_representation.preferred_audio_ids = self.preferred_audio_ids
             self.stream_info = mpd.parse_initial_stream_info(root, self.preferred_video_ids, self.preferred_audio_ids)
 
             log.INIT.debug(f"Successfully parsed MPD. Current segment t={self.stream_info['initial_t']}.")

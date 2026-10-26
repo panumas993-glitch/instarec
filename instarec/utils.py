@@ -1,4 +1,3 @@
-import logging
 import subprocess
 from pathlib import Path
 from time import gmtime, strftime
@@ -48,7 +47,6 @@ def get_next_pts_from_concatenated_file(file_path: Path, ffprobe_path: str) -> i
 
 
 def get_video_duration(file_path: Path, ffprobe_path: str) -> float | None:
-    log = logging.LoggerAdapter(logging.getLogger(), {"task_name": "FFPROBE"})
     if not file_path.exists() or file_path.stat().st_size == 0:
         return None
     try:
