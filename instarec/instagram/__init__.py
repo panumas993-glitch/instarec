@@ -16,7 +16,10 @@ def get_client(
 
         return CredentialsClient(proxy=proxy, credentials_path=credentials_file)
     except ImportError:
-        raise MissingDependencyError("instagrapi is required for username/password authentication")
+        raise MissingDependencyError(
+            "instagrapi is required for username/password authentication. "
+            "Install it with: pip install 'instarec[instagram]'"
+        )
 
 
 __all__ = [

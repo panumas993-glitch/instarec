@@ -41,9 +41,9 @@ instarec/
   utils.py          ffprobe helpers, formatting helpers
   log.py            Named LoggerAdapters that tag records with a `task_name`
   instagram/        Resolving a username / profile URL / user ID to an MPD URL
-    __init__.py     get_client(): CookieClient if --cookies, else CredentialsClient (needs optional instagrapi)
+    __init__.py     get_client(): CookieClient if --cookies, else CredentialsClient (needs the `instagram` extra)
     client.py       InstagramClient ABC: user ID resolution (HTML scraping + web_profile_info fallback), get_mpd()
-    cookies.py      CookieClient: Netscape cookie file, web API via curl_cffi (falls back to aiohttp)
+    cookies.py      CookieClient: Netscape cookie file, web API via curl_cffi
     credentials.py  CredentialsClient: instagrapi login, credentials.json/session.json in the platformdirs config dir
     exceptions.py   InstagramError hierarchy (AuthError, UserNotFoundError, UserNotLiveError, MissingDependencyError)
 tests/              pytest; currently only CLI smoke tests (--help, --version) run against the installed package
@@ -94,8 +94,14 @@ MPD's base URL. A segment pair counts as successful only if both video and audio
 
 ## Development
 
-- Install: `pip install -e .` (plus `instagrapi` and `curl_cffi` for the Instagram features; `requirements.txt` lists
-  the runtime extras). `ffmpeg` and `ffprobe` must be on `PATH`.
-- Tests: `pytest tests/` (requires the package installed so the `instarec` command exists).
-- CI (`.github/workflows/test.yaml`) runs the CLI smoke test and pytest on Python 3.10–3.13. Publishing to PyPI
-  (`publish.yml`) runs on GitHub releases; the version lives in `pyproject.toml`.
+The project is managed with [uv](https://docs.astral.sh/uv/). `ffmpeg` and `ffprobe` must be on `PATH`.
+
+- Setup: `uv sync --all-extras` creates `.venv/` with the project installed in editable mode, the `instagram` extra
+  (instagrapi) and the `dev` group (pytest, ruff).
+- Run the local CLI: `uv run instarec <url_or_username> out.mkv` (picks up code changes without reinstalling).
+- Tests: `uv run pytest`. Lint/format: `uv run ruff check` and `uv run ruff format`.
+- Dependencies: add with `uv add <pkg>` (`--optional instagram` / `--dev` as appropriate) so `uv.lock` stays in sync;
+  include the updated `uv.lock` in your changes.
+- CI (`.github/workflows/test.yaml`) runs `uv sync --locked`, the CLI smoke test and pytest on Python 3.10–3.13.
+  Publishing to PyPI (`publish.yml`) runs on GitHub releases: `uv build`, then upload via trusted publishing. The
+  version lives in `pyproject.toml`.

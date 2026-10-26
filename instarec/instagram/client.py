@@ -3,15 +3,8 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any
 
-import aiohttp
-from aiohttp_socks import ProxyConnector
-
-try:
-    from curl_cffi.requests import AsyncSession as CffiAsyncSession
-    from curl_cffi.requests.errors import RequestsError as CffiRequestsError
-except ImportError:
-    CffiAsyncSession = None
-    CffiRequestsError = Exception
+from curl_cffi.requests import AsyncSession as CffiAsyncSession
+from curl_cffi.requests.errors import RequestsError as CffiRequestsError
 
 from .. import log
 from .exceptions import AuthError, InstagramError, UserNotFoundError, UserNotLiveError
@@ -39,7 +32,6 @@ STORY_FEED_API_URL = "https://www.instagram.com/api/v1/feed/user/{user_id}/story
 class InstagramClient(ABC):
     def __init__(self, proxy: str | None = None):
         self.proxy = proxy
-        self.session: aiohttp.ClientSession | None = None
         self.headers: dict[str, str] = {}
         self.cookies: dict[str, str] = {}
 
@@ -47,9 +39,7 @@ class InstagramClient(ABC):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.session:
-            await self.session.close()
-            self.session = None
+        return False
 
     def get_headers(self) -> dict[str, str]:
         headers = dict(BASE_HEADERS)
@@ -59,49 +49,24 @@ class InstagramClient(ABC):
     def get_cookies(self) -> dict[str, str]:
         return dict(self.cookies)
 
-    async def _ensure_session(self) -> aiohttp.ClientSession:
-        if self.session is None or self.session.closed:
-            connector = ProxyConnector.from_url(self.proxy) if self.proxy else None
-            self.session = aiohttp.ClientSession(connector=connector, headers=self.get_headers())
-        return self.session
-
     async def _fetch_url(self, url: str, headers: dict | None = None) -> tuple[int, str, str]:
         req_headers = self.get_headers()
         if headers:
             req_headers.update(headers)
         cookies = self.get_cookies()
 
-        if CffiAsyncSession is not None:
-            try:
-                async with CffiAsyncSession(impersonate="chrome") as session:
-                    resp = await session.get(
-                        url,
-                        headers=req_headers,
-                        cookies=cookies,
-                        proxy=self.proxy,
-                        timeout=TIMEOUT_SECONDS,
-                    )
-                    return resp.status_code, resp.text, str(resp.url)
-            except (TimeoutError, CffiRequestsError) as e:
-                raise AuthError(f"Network error querying Instagram ({type(e).__name__}): {e}") from e
-        else:
-            log.API.warning(
-                "curl_cffi is not installed; falling back to standard aiohttp. "
-                "Instagram may block requests due to TLS fingerprinting. "
-                "Install via 'pip install curl_cffi'."
-            )
-            try:
-                session = await self._ensure_session()
-                async with session.get(
+        try:
+            async with CffiAsyncSession(impersonate="chrome") as session:
+                resp = await session.get(
                     url,
                     headers=req_headers,
                     cookies=cookies,
+                    proxy=self.proxy,
                     timeout=TIMEOUT_SECONDS,
-                ) as resp:
-                    text = await resp.text()
-                    return resp.status, text, str(resp.url)
-            except (aiohttp.ClientError, TimeoutError) as e:
-                raise AuthError(f"Network error querying Instagram: {e}") from e
+                )
+                return resp.status_code, resp.text, str(resp.url)
+        except (TimeoutError, CffiRequestsError) as e:
+            raise AuthError(f"Network error querying Instagram ({type(e).__name__}): {e}") from e
 
     def _extract_user_id_from_html(self, html_text: str, target_username: str) -> str | None:
         for script_match in re.finditer(

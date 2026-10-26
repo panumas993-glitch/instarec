@@ -23,7 +23,20 @@ dependencies = [
     "aiofiles",
     "lxml",
     "tqdm",
-    "platformdirs"
+    "platformdirs",
+    "curl_cffi",
+]
+
+[project.optional-dependencies]
+instagram = [
+    "instagrapi",
+    "PySocks",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
 ]
 
 [project.scripts]

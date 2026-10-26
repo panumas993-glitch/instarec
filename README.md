@@ -80,11 +80,11 @@ This method uses session cookies exported from your browser and does not require
 
 #### 2. Credentials-Based Authentication (instagrapi)
 
-1.  **Install `instagrapi`:**
+1.  **Install the `instagram` extra:**
 
-    `instagrapi` is an optional dependency used for username/password login:
+    `instagrapi` is an optional dependency used for username/password login. Install it with the `instagram` extra:
     ```bash
-    pip install instagrapi
+    pip install "instarec[instagram]"
     ```
 
 2.  **Configure Credentials:**

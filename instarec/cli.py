@@ -7,13 +7,6 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-if __name__ == "__main__" and __package__ is None:
-    project_root = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(project_root))
-    from instarec import cli  # noqa: PLW0406
-
-    sys.exit(cli.main_entry())
-
 from . import instagram, log
 from .downloader import StreamDownloader
 from .interactive import interactive_stream_selection
