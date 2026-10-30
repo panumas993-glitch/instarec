@@ -1,15 +1,26 @@
+import asyncio
 import json
 import re
 from abc import ABC, abstractmethod
 from typing import Any
 
-from curl_cffi.requests import AsyncSession as CffiAsyncSession
-from curl_cffi.requests.errors import RequestsError as CffiRequestsError
+import aiohttp
+from aiohttp_socks import ProxyConnector
+
+try:
+    from curl_cffi import requests as cffi_requests
+    from curl_cffi.requests import AsyncSession as CffiAsyncSession
+    from curl_cffi.requests.errors import RequestsError as CffiRequestsError
+except ImportError:
+    cffi_requests = None
+    CffiAsyncSession = None
+    CffiRequestsError = Exception
 
 from .. import log
 from .exceptions import AuthError, InstagramError, UserNotFoundError, UserNotLiveError
 
 TIMEOUT_SECONDS = 10
+FETCH_RETRIES = 3
 
 BASE_HEADERS = {
     "User-Agent": (
@@ -32,6 +43,7 @@ STORY_FEED_API_URL = "https://www.instagram.com/api/v1/feed/user/{user_id}/story
 class InstagramClient(ABC):
     def __init__(self, proxy: str | None = None):
         self.proxy = proxy
+        self.session: aiohttp.ClientSession | None = None
         self.headers: dict[str, str] = {}
         self.cookies: dict[str, str] = {}
 
@@ -39,7 +51,9 @@ class InstagramClient(ABC):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        return False
+        if self.session:
+            await self.session.close()
+            self.session = None
 
     def get_headers(self) -> dict[str, str]:
         headers = dict(BASE_HEADERS)
@@ -49,24 +63,59 @@ class InstagramClient(ABC):
     def get_cookies(self) -> dict[str, str]:
         return dict(self.cookies)
 
+    async def _ensure_session(self) -> aiohttp.ClientSession:
+        if self.session is None or self.session.closed:
+            connector = ProxyConnector.from_url(self.proxy) if self.proxy else None
+            self.session = aiohttp.ClientSession(connector=connector, headers=self.get_headers())
+        return self.session
+
     async def _fetch_url(self, url: str, headers: dict | None = None) -> tuple[int, str, str]:
         req_headers = self.get_headers()
         if headers:
             req_headers.update(headers)
         cookies = self.get_cookies()
 
-        try:
-            async with CffiAsyncSession(impersonate="chrome") as session:
-                resp = await session.get(
+        if cffi_requests is not None:
+            # NOTE: creating a fresh curl_cffi AsyncSession per request randomly fails with
+            # "Resolving timed out" on some Windows setups (curl_cffi 0.17 / Python 3.13).
+            # The sync client run in a worker thread is reliable, so use that, with retries.
+            last_exc: Exception | None = None
+            for attempt in range(1, FETCH_RETRIES + 1):
+                try:
+                    resp = await asyncio.to_thread(
+                        cffi_requests.get,
+                        url,
+                        headers=req_headers,
+                        cookies=cookies,
+                        proxy=self.proxy,
+                        impersonate="chrome",
+                        timeout=TIMEOUT_SECONDS,
+                    )
+                    return resp.status_code, resp.text, str(resp.url)
+                except (TimeoutError, CffiRequestsError) as e:
+                    last_exc = e
+                    log.API.debug(f"Request failed (attempt {attempt}/{FETCH_RETRIES}): {type(e).__name__}: {e}")
+            raise InstagramError(
+                f"Network error querying Instagram ({type(last_exc).__name__}): {last_exc}"
+            ) from last_exc
+        else:
+            log.API.warning(
+                "curl_cffi is not installed; falling back to standard aiohttp. "
+                "Instagram may block requests due to TLS fingerprinting. "
+                "Install via 'pip install curl_cffi'."
+            )
+            try:
+                session = await self._ensure_session()
+                async with session.get(
                     url,
                     headers=req_headers,
                     cookies=cookies,
-                    proxy=self.proxy,
                     timeout=TIMEOUT_SECONDS,
-                )
-                return resp.status_code, resp.text, str(resp.url)
-        except (TimeoutError, CffiRequestsError) as e:
-            raise AuthError(f"Network error querying Instagram ({type(e).__name__}): {e}") from e
+                ) as resp:
+                    text = await resp.text()
+                    return resp.status, text, str(resp.url)
+            except (aiohttp.ClientError, TimeoutError) as e:
+                raise InstagramError(f"Network error querying Instagram: {e}") from e
 
     def _extract_user_id_from_html(self, html_text: str, target_username: str) -> str | None:
         for script_match in re.finditer(
@@ -142,6 +191,9 @@ class InstagramClient(ABC):
         final_url = ""
         try:
             status_code, html_text, final_url = await self._fetch_url(profile_url)
+        except InstagramError as e:
+            # Network failure: report it as such instead of falling through to "does not exist".
+            raise InstagramError(f"Could not resolve user '{clean_user}': {e}") from e
         except Exception as e:
             log.API.debug(f"Profile HTML network request failed for '{clean_user}': {e}")
 
